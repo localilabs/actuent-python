@@ -28,6 +28,21 @@ from actuent.langchain import get_tools
 tools = get_tools()          # [ActuentSearchTool]
 ```
 
+
+## Plans, services and more (0.2)
+
+```python
+client.plan("Nørreport, Copenhagen", stops=["dinner", "drinks"], start_time="19:00")
+client.trip("Lisbon", days=3)
+client.find_service("skin fade under €30", location="Amsterdam")
+client.nearby("cafe", "Jordaan, Amsterdam", filters=["vegan", "wifi"], open_now=True)
+client.events(location="Copenhagen", query="jazz")
+client.ask_site("nike.com", "free returns?")
+client.compare_products([url_a, url_b])
+client.score("yoursite.com")                     # agent-readiness 0–100
+client.watch_price(url, notify="both")           # Pro: price drops and back in stock
+```
+
 ## LlamaIndex
 
 ```bash

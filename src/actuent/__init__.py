@@ -4,6 +4,8 @@
     client = Actuent()                      # free tier, or Actuent(api_key="ak_...") for Pro
     results = client.search("barber amsterdam")
     shoes = client.search("running shoes under €100")["products"]
+    evening = client.plan("Nørreport, Copenhagen", stops=["dinner", "drinks"])
+    fade = client.find_service("skin fade under €30", location="Amsterdam")
 """
 
 import json
@@ -13,7 +15,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = ["Actuent", "ActuentError", "RateLimitError"]
 
 _USER_AGENT = f"actuent-python/{__version__}"
@@ -114,3 +116,92 @@ class Actuent:
     def state(self) -> Dict[str, Any]:
         """Live "State of the AI web" statistics."""
         return self._request("GET", f"{self.base_url}/api/state")
+
+    # ----- Tools from the Actuent MCP server (the same ones ChatGPT and Claude use) -----
+
+    def _tool(self, name: str, arguments: Dict[str, Any]) -> Any:
+        args = {k: v for k, v in arguments.items() if v is not None}
+        reply = self._request("POST", f"{self.agents_url}/api/mcp",
+                              {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}})
+        if not isinstance(reply, dict) or "result" not in reply:
+            raise ActuentError((reply or {}).get("error", {}).get("message", "Unexpected response"), None, reply)
+        result = reply["result"]
+        text = "".join(part.get("text", "") for part in result.get("content", []) if part.get("type") == "text")
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = text
+        if result.get("isError"):
+            message = data.get("error") if isinstance(data, dict) else str(data)
+            raise ActuentError(message or f"{name} failed", None, data)
+        return data
+
+    def get_actions(self, domain: str) -> Dict[str, Any]:
+        """A site's actions, whether each is executable, and the JSON Schema of each input."""
+        return self._tool("actuent_get_actions", {"domain": domain})
+
+    def ask_site(self, domain: str, question: str) -> Dict[str, Any]:
+        """Answer a question from one site's own pages, e.g. ("nike.com", "free returns?")."""
+        return self._tool("actuent_ask_site", {"domain": domain, "question": question})
+
+    def nearby(self, query: str, location: str, radius_metres: Optional[int] = None, open_now: Optional[bool] = None,
+               filters: Optional[list] = None) -> Dict[str, Any]:
+        """Places near a location. filters: vegan, vegetarian, gluten_free, wheelchair, outdoor_seating, wifi, kids, dogs."""
+        return self._tool("actuent_nearby", {"query": query, "location": location, "radius_metres": radius_metres,
+                                             "open_now": open_now, "filters": filters})
+
+    def find_service(self, query: str, location: Optional[str] = None, max_price: Optional[float] = None,
+                     currency: Optional[str] = None) -> Dict[str, Any]:
+        """A service or dish with its price at local businesses, e.g. "skin fade under €30"."""
+        return self._tool("actuent_find_service", {"query": query, "location": location, "max_price": max_price, "currency": currency})
+
+    def plan(self, location: str, stops: Optional[list] = None, date: Optional[str] = None, start_time: Optional[str] = None,
+             cuisine: Optional[str] = None, filters: Optional[list] = None) -> Dict[str, Any]:
+        """A timed outing, e.g. stops=["dinner", "drinks"] from 19:00, with places open when you'd arrive."""
+        return self._tool("actuent_plan", {"location": location, "stops": stops, "date": date, "start_time": start_time,
+                                           "cuisine": cuisine, "filters": filters})
+
+    def trip(self, location: str, days: int = 2, start_date: Optional[str] = None, filters: Optional[list] = None) -> Dict[str, Any]:
+        """A 1–4 day city trip: where to stay and a plan for each day."""
+        return self._tool("actuent_trip", {"location": location, "days": days, "start_date": start_date, "filters": filters})
+
+    def events(self, location: Optional[str] = None, query: Optional[str] = None, date_from: Optional[str] = None,
+               date_to: Optional[str] = None) -> Dict[str, Any]:
+        """Upcoming events that websites publish, by city, topic and dates (YYYY-MM-DD)."""
+        return self._tool("actuent_events", {"location": location, "query": query, "from": date_from, "to": date_to})
+
+    def compare_sites(self, domains: list) -> Any:
+        """Compare two or more sites side by side."""
+        return self._tool("actuent_compare", {"domains": domains})
+
+    def compare_products(self, urls: list) -> Dict[str, Any]:
+        """Compare products by URL: price, stock, 90-day price range and cheaper shops."""
+        return self._tool("actuent_compare", {"products": urls})
+
+    def news(self, topic: str) -> Any:
+        """Latest articles on a topic."""
+        return self._tool("actuent_news", {"topic": topic})
+
+    def watch_price(self, url: str, target_price_eur: Optional[float] = None, notify: str = "price",
+                    webhook_url: Optional[str] = None) -> Dict[str, Any]:
+        """(Pro) Get an email, and optionally a webhook, when a product's price drops or it's back in stock
+        (notify="price", "stock" or "both")."""
+        return self._tool("actuent_watch_price", {"url": url, "target_price_eur": target_price_eur, "notify": notify, "webhook_url": webhook_url})
+
+    def price_watches(self) -> Dict[str, Any]:
+        """(Pro) Your price watches."""
+        return self._tool("actuent_watch_price", {"action": "list"})
+
+    def execute_action(self, domain: str, action_id: str, input: Any = None) -> Dict[str, Any]:
+        """(Pro) Perform a site's action. Confirm with your user first."""
+        return self._tool("actuent_execute_action", {"domain": domain, "action_id": action_id, "input": input})
+
+    # ----- Scores and badges -----
+
+    def score(self, domain: str) -> Dict[str, Any]:
+        """A site's agent-readiness score (0–100), label, category and checks."""
+        return self._request("GET", f"{self.base_url}/badge.json?domain={urllib.parse.quote(domain)}")
+
+    def leaderboard(self) -> Dict[str, Any]:
+        """The 100 sites agents found most often this week."""
+        return self._request("GET", f"{self.base_url}/leaderboard")
