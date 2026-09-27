@@ -10,13 +10,14 @@
 
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
-__version__ = "0.3.0"
-__all__ = ["Actuent", "ActuentError", "RateLimitError"]
+__version__ = "0.4.0"
+__all__ = ["Actuent", "ActuentError", "RateLimitError", "BusyError"]
 
 _USER_AGENT = f"actuent-python/{__version__}"
 
@@ -38,22 +39,46 @@ class RateLimitError(ActuentError):
         self.retry_after = retry_after
 
 
+class BusyError(ActuentError):
+    """Actuent is very busy right now (HTTP 503). `retry_after` is the number of seconds to wait;
+    the message is written for people, so it can be shown as is."""
+
+    def __init__(self, message: str, retry_after: Optional[int] = None, body: Any = None):
+        super().__init__(message, 503, body)
+        self.retry_after = retry_after
+
+
 class Actuent:
     """Client for the Actuent API (https://docs.actuent.ai).
 
     api_key: optional Pro key from actuent.ai. Defaults to the ACTUENT_API_KEY environment variable.
     Without a key you get the free tier (20 requests/minute).
+    retries: when Actuent is busy (429/503), wait as long as it asks (at most 60s) and try again,
+    this many times. Default 1; 0 turns it off.
+
+    Search results that are limited or empty include "message" and "notices", in plain English:
+    show "message" to the user. See https://docs.actuent.ai/#errors
     """
 
     def __init__(self, api_key: Optional[str] = None, base_url: str = "https://api.actuent.ai",
-                 agents_url: str = "https://agents.actuent.ai", timeout: float = 60.0):
+                 agents_url: str = "https://agents.actuent.ai", timeout: float = 60.0, retries: int = 1):
         self.api_key = api_key if api_key is not None else os.environ.get("ACTUENT_API_KEY")
         self.base_url = base_url.rstrip("/")
         self.agents_url = agents_url.rstrip("/")
         self.timeout = timeout
         self.rate_limit: Dict[str, Optional[int]] = {}
+        self.retries = max(0, retries)
 
     def _request(self, method: str, url: str, body: Optional[Dict[str, Any]] = None) -> Any:
+        for attempt in range(self.retries + 1):
+            try:
+                return self._request_once(method, url, body)
+            except (RateLimitError, BusyError) as error:
+                if attempt >= self.retries:
+                    raise
+                time.sleep(min(error.retry_after or 30, 60))
+
+    def _request_once(self, method: str, url: str, body: Optional[Dict[str, Any]] = None) -> Any:
         headers = {"Accept": "application/json", "User-Agent": _USER_AGENT}
         data = None
         if body is not None:
@@ -72,10 +97,13 @@ class Actuent:
                 payload = json.loads(error.read().decode("utf-8") or "null")
             except ValueError:
                 payload = None
-            message = (payload or {}).get("error") or (payload or {}).get("message") or f"HTTP {error.code}"
+            message = (payload or {}).get("message") or (payload or {}).get("error") or f"HTTP {error.code}"
+            retry = error.headers.get("Retry-After")
+            retry_after = int(retry) if retry and retry.isdigit() else (payload or {}).get("retry_after_seconds")
             if error.code == 429:
-                retry = error.headers.get("Retry-After")
-                raise RateLimitError(message, int(retry) if retry and retry.isdigit() else None, payload) from None
+                raise RateLimitError(message, retry_after, payload) from None
+            if error.code == 503:
+                raise BusyError(message, retry_after, payload) from None
             raise ActuentError(message, error.code, payload) from None
 
     def _remember_limits(self, headers: Any) -> None:
@@ -132,7 +160,7 @@ class Actuent:
         except ValueError:
             data = text
         if result.get("isError"):
-            message = data.get("error") if isinstance(data, dict) else str(data)
+            message = (data.get("message") or data.get("error")) if isinstance(data, dict) else str(data)
             raise ActuentError(message or f"{name} failed", None, data)
         return data
 

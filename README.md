@@ -63,3 +63,7 @@ tools = get_tools()          # [FunctionTool actuent_search]
 Docs: [docs.actuent.ai](https://docs.actuent.ai) · MCP server for Claude and ChatGPT: `https://agents.actuent.ai/api/mcp`
 
 Made by [localilabs](https://localilabs.com). MIT licensed.
+
+## When Actuent is busy
+
+Limited or empty search results include a plain-English `message` (and `notices`) you can show the user. If Actuent is very busy (HTTP 429 or 503) the client waits as long as the server asks and tries once more (`Actuent(retries=0)` turns that off); after that it raises `RateLimitError` or `BusyError`, whose message is written for people and whose `retry_after` says how many seconds to wait. See [Errors & busy times](https://docs.actuent.ai/#errors).
