@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = ["Actuent", "ActuentError", "RateLimitError"]
 
 _USER_AGENT = f"actuent-python/{__version__}"
@@ -192,9 +192,20 @@ class Actuent:
         """(Pro) Your price watches."""
         return self._tool("actuent_watch_price", {"action": "list"})
 
-    def execute_action(self, domain: str, action_id: str, input: Any = None) -> Dict[str, Any]:
-        """(Pro) Perform a site's action. Confirm with your user first."""
-        return self._tool("actuent_execute_action", {"domain": domain, "action_id": action_id, "input": input})
+    def execute_action(self, domain: str, action_id: str, input: Any = None, mode: str = "execute",
+                       confirmed: Optional[bool] = None) -> Dict[str, Any]:
+        """(Pro) Perform a site's action.
+
+        Actions that cost money or ask for confirmation first return needs_confirmation: show the
+        user the details, then call again with confirmed=True. mode="quote" returns price and
+        availability without committing. Long-running actions return pending with a status_url.
+        """
+        return self._tool("actuent_execute_action", {"domain": domain, "action_id": action_id, "input": input,
+                                                     "mode": mode, "confirmed": confirmed})
+
+    def action_status(self, domain: str, status_url: str) -> Dict[str, Any]:
+        """(Pro) Check a long-running action that returned pending."""
+        return self._tool("actuent_action_status", {"domain": domain, "status_url": status_url})
 
     # ----- Scores and badges -----
 
