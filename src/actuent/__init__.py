@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = ["Actuent", "ActuentError", "RateLimitError", "BusyError"]
 
 _USER_AGENT = f"actuent-python/{__version__}"
@@ -113,12 +113,21 @@ class Actuent:
         self.rate_limit = {"limit": number("X-RateLimit-Limit"), "remaining": number("X-RateLimit-Remaining"),
                            "reset": number("X-RateLimit-Reset")}
 
-    def search(self, query: str) -> Dict[str, Any]:
+    def search(self, query: str, **options: Any) -> Dict[str, Any]:
         """Search by topic, domain or page, in any language. Returns {"results": [...LAWP], "products": [...]}.
 
         Examples: "barber amsterdam", "nike.com", "stripe.com/pricing", "running shoes under €100".
+        Options: limit, offset, category, city, lang, open_now=True, sort="relevance"|"popular"|"fresh".
+        Results have "snippet", "score" (0-100) and "matched"; the response may have "did_you_mean",
+        "related", "events", "places" and a plain-English "message".
         """
-        return self._request("GET", f"{self.base_url}/api/search?q={urllib.parse.quote(query)}")
+        params = {"q": query}
+        params.update({k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in options.items() if v is not None})
+        return self._request("GET", f"{self.base_url}/api/search?{urllib.parse.urlencode(params)}")
+
+    def autocomplete(self, prefix: str) -> Dict[str, Any]:
+        """Sites and searches that start with what's typed: {"sites": [...], "searches": [...]}."""
+        return self._request("GET", f"{self.base_url}/api/autocomplete?q={urllib.parse.quote(prefix)}")
 
     def get_site(self, domain: str) -> Optional[Dict[str, Any]]:
         """The LAWP for one site (or None if Actuent can't find it)."""
