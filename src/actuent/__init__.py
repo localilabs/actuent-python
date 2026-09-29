@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 __all__ = ["Actuent", "ActuentError", "RateLimitError", "BusyError"]
 
 _USER_AGENT = f"actuent-python/{__version__}"
@@ -183,6 +183,10 @@ class Actuent:
             message = (data.get("message") or data.get("error")) if isinstance(data, dict) else str(data)
             raise ActuentError(message or f"{name} failed", None, data)
         return data
+
+    def tool(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> Any:
+        """Call any Actuent MCP tool, e.g. tool("actuent_plan", {"location": "Copenhagen"})."""
+        return self._tool(name, arguments or {})
 
     def get_actions(self, domain: str) -> Dict[str, Any]:
         """A site's actions, whether each is executable, and the JSON Schema of each input."""
