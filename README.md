@@ -1,3 +1,5 @@
+<p align="center"><img src="https://api.actuent.ai/assets/lawpy/lawpy-dance.gif" width="108" height="72" alt="Lawpy, the Actuent mascot, dancing"></p>
+
 # Actuent for Python
 
 Search the web as structured data. [Actuent](https://actuent.ai) is a search engine for AI agents: it returns websites as **LAWP** (clean JSON with each site's pages and the actions a visitor can take) and products with prices, instead of raw HTML.
