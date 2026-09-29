@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __all__ = ["Actuent", "ActuentError", "RateLimitError", "BusyError"]
 
 _USER_AGENT = f"actuent-python/{__version__}"
@@ -119,7 +119,9 @@ class Actuent:
         Examples: "barber amsterdam", "nike.com", "stripe.com/pricing", "running shoes under €100".
         Options: limit, offset, category, city, lang, open_now=True, sort="relevance"|"popular"|"fresh".
         Results have "snippet", "score" (0-100) and "matched"; the response may have "did_you_mean",
-        "related", "events", "places" and a plain-English "message".
+        "related", "events", "places", "products", a plain-English "message", "comparison" (for
+        "notion vs obsidian": {"sites", "tip"}) and "answer" (for "does basecamp have a free plan":
+        {"domain", "sentences": [{"text", "url"}], "note"}).
         """
         params = {"q": query}
         params.update({k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in options.items() if v is not None})
