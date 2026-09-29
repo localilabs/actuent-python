@@ -39,6 +39,47 @@ class ActuentSearchTool(BaseTool):
         return json.dumps(self.client.search(query), ensure_ascii=False)
 
 
+class _AskInput(BaseModel):
+    domain: str = Field(description="The site, e.g. basecamp.com")
+    question: str = Field(description="The question, in plain words, e.g. 'is there a free plan?'")
+
+
+class ActuentAskSiteTool(BaseTool):
+    """Answer a question from one website's own pages."""
+
+    name: str = "actuent_ask_site"
+    description: str = (
+        "Answer a question from one website's own pages ('does basecamp have a free plan?', 'is there parking?'). "
+        "Returns matching sentences with the page each came from."
+    )
+    args_schema: Type[BaseModel] = _AskInput
+    client: Actuent = Field(default_factory=Actuent, exclude=True)
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def _run(self, domain: str, question: str, run_manager=None) -> str:
+        return json.dumps(self.client.ask(domain, question), ensure_ascii=False)
+
+
+class _SimilarInput(BaseModel):
+    domain: str = Field(description="The site to find alternatives to, e.g. notion.so")
+
+
+class ActuentSimilarTool(BaseTool):
+    """Find websites like a given one."""
+
+    name: str = "actuent_similar"
+    description: str = "Find websites like a given one ('alternatives to mailchimp.com'), with why each is similar."
+    args_schema: Type[BaseModel] = _SimilarInput
+    client: Actuent = Field(default_factory=Actuent, exclude=True)
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def _run(self, domain: str, run_manager=None) -> str:
+        return json.dumps(self.client.similar(domain), ensure_ascii=False)
+
+
 def get_tools(api_key: Optional[str] = None) -> List[BaseTool]:
-    """Actuent tools for a LangChain agent."""
-    return [ActuentSearchTool(client=Actuent(api_key=api_key))]
+    """Actuent tools for a LangChain agent: search, ask a site, similar sites."""
+    client = Actuent(api_key=api_key)
+    return [ActuentSearchTool(client=client), ActuentAskSiteTool(client=client), ActuentSimilarTool(client=client)]

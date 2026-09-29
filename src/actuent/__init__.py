@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __all__ = ["Actuent", "ActuentError", "RateLimitError", "BusyError"]
 
 _USER_AGENT = f"actuent-python/{__version__}"
@@ -126,6 +126,15 @@ class Actuent:
         params = {"q": query}
         params.update({k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in options.items() if v is not None})
         return self._request("GET", f"{self.base_url}/api/search?{urllib.parse.urlencode(params)}")
+
+    def ask(self, domain: str, question: str) -> Dict[str, Any]:
+        """Answer a question from one site's own pages ("is there parking?"):
+        {"sentences": [{"text", "url"}], "actions": [...], "note" or "message"}."""
+        return self._request("GET", f"{self.base_url}/api/ask?domain={urllib.parse.quote(domain)}&q={urllib.parse.quote(question)}")
+
+    def similar(self, domain: str, limit: int = 10) -> Dict[str, Any]:
+        """Sites like this one ("sites like notion.so"): {"sites": [{"domain", "name", "category", "why"}]}."""
+        return self._request("GET", f"{self.base_url}/api/similar?domain={urllib.parse.quote(domain)}&limit={int(limit)}")
 
     def autocomplete(self, prefix: str) -> Dict[str, Any]:
         """Sites and searches that start with what's typed: {"sites": [...], "searches": [...]}."""
