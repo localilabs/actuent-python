@@ -31,6 +31,13 @@ class ActuentError(Exception):
         self.body = body
 
 
+class _Hiccup(Exception):
+    """Internal: a failure worth retrying quickly (network, timeout, 500/502/504)."""
+    def __init__(self, message: str, status: int) -> None:
+        super().__init__(message)
+        self.status = status
+
+
 class RateLimitError(ActuentError):
     """Too many requests. `retry_after` is the number of seconds to wait."""
 
@@ -70,13 +77,18 @@ class Actuent:
         self.retries = max(0, retries)
 
     def _request(self, method: str, url: str, body: Optional[Dict[str, Any]] = None) -> Any:
-        for attempt in range(self.retries + 1):
+        for attempt in range(max(self.retries, 2) + 1):
             try:
                 return self._request_once(method, url, body)
             except (RateLimitError, BusyError) as error:
                 if attempt >= self.retries:
                     raise
                 time.sleep(min(error.retry_after or 30, 60))
+            except _Hiccup as error:
+                # A network blip, timeout or server hiccup (500/502/504): short pauses, twice at most.
+                if attempt >= max(self.retries, 2):
+                    raise ActuentError(str(error), error.status, None) from None
+                time.sleep(1.5 * (attempt + 1))
 
     def _request_once(self, method: str, url: str, body: Optional[Dict[str, Any]] = None) -> Any:
         headers = {"Accept": "application/json", "User-Agent": _USER_AGENT}
@@ -104,7 +116,11 @@ class Actuent:
                 raise RateLimitError(message, retry_after, payload) from None
             if error.code == 503:
                 raise BusyError(message, retry_after, payload) from None
+            if error.code in (500, 502, 504):
+                raise _Hiccup(message, error.code) from None
             raise ActuentError(message, error.code, payload) from None
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as error:
+            raise _Hiccup(f"Couldn't reach Actuent: {error}", 0) from None
 
     def _remember_limits(self, headers: Any) -> None:
         def number(name: str) -> Optional[int]:
