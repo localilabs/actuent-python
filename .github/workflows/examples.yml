@@ -1,0 +1,19 @@
+name: Examples
+# Nightly: the examples in examples/ run against the live API, so the docs never show broken code.
+on:
+  schedule:
+    - cron: '25 5 * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  examples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e .
+      - run: for f in examples/*.py; do echo "== $f"; python "$f"; done
