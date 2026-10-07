@@ -233,6 +233,27 @@ class Actuent:
         """A 1–4 day city trip: where to stay and a plan for each day."""
         return self._tool("actuent_trip", {"location": location, "days": days, "start_date": start_date, "filters": filters})
 
+    def about(self, name: str) -> Dict[str, Any]:
+        """Everything Actuent knows about one named thing: an artist and their concerts, a brand and its prices, a venue."""
+        return self.tool("actuent_about", {"name": name})
+
+    def read_page(self, url: str) -> Dict[str, Any]:
+        """Read any public page live: text, products (Shopify sizes with cart links), events, hours, booking links."""
+        return self.tool("actuent_get_page", {"url": url})
+
+    def contact_business(self, domain: str, text: str, kind: str = "question", confirmed: bool = False, **details: Any) -> Dict[str, Any]:
+        """Pro: email a business a question or message (or a booking request for claimed sites: date, time, party_size).
+        Show the user the text first and pass confirmed=True once they agree."""
+        return self.tool("actuent_contact_business", {"domain": domain, "text": text, "kind": kind, "confirmed": confirmed, **details})
+
+    def watch_page(self, url: Optional[str] = None, phrase: Optional[str] = None, watch_for: Optional[str] = None, action: str = "watch", **extra: Any) -> Dict[str, Any]:
+        """Pro: get an email when a page changes, or when words appear or disappear ("tickets on sale", "sold out")."""
+        args: Dict[str, Any] = {"action": action, **extra}
+        if url: args["url"] = url
+        if phrase: args["phrase"] = phrase
+        if watch_for: args["watch_for"] = watch_for
+        return self.tool("actuent_watch_page", args)
+
     def events(self, location: Optional[str] = None, query: Optional[str] = None, date_from: Optional[str] = None,
                date_to: Optional[str] = None) -> Dict[str, Any]:
         """Upcoming events that websites publish, by city, topic and dates (YYYY-MM-DD)."""
