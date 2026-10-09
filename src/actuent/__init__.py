@@ -9,6 +9,7 @@
 """
 
 import json
+from . import tool_types  # TypedDicts for every tool's arguments and results (generated)
 import os
 import time
 import urllib.error
